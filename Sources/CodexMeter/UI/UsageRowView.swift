@@ -13,10 +13,11 @@ struct UsageRowView: View {
                 Spacer()
                 Text(percentText)
                     .font(.subheadline.monospacedDigit().bold())
-                    .foregroundStyle(color)
+                    .foregroundStyle(Self.percentTextColor)
+                    .shadow(color: .black.opacity(0.35), radius: 1.5, x: 0, y: 1)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(color.opacity(0.15), in: Capsule())
+                    .background(Color.black, in: Capsule())
             }
             ProgressView(value: window?.usedPercent ?? 0, total: 100)
                 .tint(color)
@@ -40,6 +41,8 @@ struct UsageRowView: View {
     private var color: Color {
         UsageColor.forPercent(window?.usedPercent)
     }
+
+    private static let percentTextColor = Color(red: 0.36, green: 0.82, blue: 0.44)
 
     private var resetText: String {
         guard let window else { return "N/A" }

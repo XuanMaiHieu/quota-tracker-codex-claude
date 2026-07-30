@@ -104,14 +104,27 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func fetchQuota() {
+    /// Retried a couple of times before surfacing an error: right after a boot-time
+    /// launch (login item), `codex app-server` can accept the RPC connection before
+    /// its own auth/session state has finished settling, so the very first
+    /// `account/rateLimits/read` call can fail transiently even though the process
+    /// is otherwise healthy and the next call succeeds moments later.
+    private func fetchQuota(attempt: Int = 0) {
         Task {
             let service = UsagePollingService(rpcClient: serverManager.rpcClient)
             do {
                 let response = try await service.fetchRateLimits()
                 usage = .from(response, lastUpdated: Date(), connectionStatus: .connected)
             } catch {
-                usage.connectionStatus = .error(error.localizedDescription)
+                guard attempt < 2 else {
+                    Logger.log("fetchQuota failed after retries: \(error)")
+                    usage.connectionStatus = .error(error.localizedDescription)
+                    return
+                }
+                Logger.log("fetchQuota failed (attempt \(attempt + 1)), retrying: \(error)")
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                fetchQuota(attempt: attempt + 1)
             }
         }
     }
