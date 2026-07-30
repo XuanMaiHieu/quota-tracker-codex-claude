@@ -48,12 +48,7 @@ struct UsageState {
     var lastUpdated: Date?
     var connectionStatus: ConnectionStatus
 
-    static let dummy = UsageState(
-        primary: UsageWindow(kind: .fiveHour, usedPercent: 24, resetsAt: Date().addingTimeInterval(2 * 3600 + 18 * 60), durationMinutes: 300),
-        secondary: UsageWindow(kind: .weekly, usedPercent: 61, resetsAt: Date().addingTimeInterval(3 * 86400), durationMinutes: 10080),
-        lastUpdated: Date(),
-        connectionStatus: .connected
-    )
+    static let notConnected = UsageState(primary: nil, secondary: nil, lastUpdated: nil, connectionStatus: .connecting)
 }
 
 // MARK: - Normalization

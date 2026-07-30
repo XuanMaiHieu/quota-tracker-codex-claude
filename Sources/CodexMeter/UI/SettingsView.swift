@@ -10,7 +10,7 @@ struct SettingsView: View {
             dataTab.tabItem { Text("Data") }
         }
         .padding(20)
-        .frame(width: 380, height: 160)
+        .frame(width: 380, height: 200)
     }
 
     private var generalTab: some View {
@@ -27,6 +27,9 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.radioGroup)
+
+            Toggle("Show Codex", isOn: $settings.showCodex)
+            Toggle("Show Claude Code", isOn: $settings.showClaude)
         }
     }
 

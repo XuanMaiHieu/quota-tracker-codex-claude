@@ -22,6 +22,13 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$BIN_PATH" "$MACOS_DIR/CodexMeter"
 
+# SPM's generated Bundle.module accessor looks for this bundle directly under
+# Bundle.main.bundleURL (the .app root), not Contents/Resources.
+RESOURCE_BUNDLE="$(dirname "$BIN_PATH")/CodexMeter_CodexMeter.bundle"
+if [[ -d "$RESOURCE_BUNDLE" ]]; then
+    cp -R "$RESOURCE_BUNDLE" "$APP_DIR/CodexMeter_CodexMeter.bundle"
+fi
+
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

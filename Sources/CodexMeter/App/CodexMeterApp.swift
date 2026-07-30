@@ -19,7 +19,7 @@ struct CodexMeterApp: App {
                 .environmentObject(appState)
                 .environmentObject(settings)
         } label: {
-            MenuBarLabel(appState: appState, displayMode: settings.displayMode)
+            MenuBarLabel(appState: appState, settings: settings)
         }
         .menuBarExtraStyle(.window)
     }

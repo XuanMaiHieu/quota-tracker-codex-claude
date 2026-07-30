@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "CodexMeter",
-            path: "Sources/CodexMeter"
+            path: "Sources/CodexMeter",
+            resources: [.copy("Resources")]
         )
     ]
 )

@@ -136,16 +136,52 @@ final class CodexServerManager: ObservableObject {
     }
 
     /// Looks up `codex` on PATH rather than hardcoding a Homebrew-specific path.
+    /// GUI-launched apps (Finder double-click, or a login item at boot) get a
+    /// minimal system PATH that does NOT include Homebrew/nvm/etc — the process's
+    /// own PATH alone is not enough, so common install dirs and a login-shell
+    /// lookup are tried as fallbacks.
     private static func resolveCodexPath() -> String? {
-        let pathEnv = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let searchDirs = pathEnv.split(separator: ":").map(String.init)
         let fileManager = FileManager.default
+        let envPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        var searchDirs = envPath.split(separator: ":").map(String.init)
+        searchDirs.append(contentsOf: [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            NSHomeDirectory() + "/.local/bin"
+        ])
         for dir in searchDirs {
             let candidate = (dir as NSString).appendingPathComponent("codex")
             if fileManager.isExecutableFile(atPath: candidate) {
                 return candidate
             }
         }
-        return nil
+        return resolveViaLoginShell()
+    }
+
+    /// Runs the user's login shell to pick up PATH entries added by shell
+    /// profiles (nvm, custom installers, etc) that a bare GUI process misses.
+    private static func resolveViaLoginShell() -> String? {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-lc", "command -v codex"]
+        let stdoutPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        guard let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty,
+              FileManager.default.isExecutableFile(atPath: path) else {
+            return nil
+        }
+        return path
     }
 }

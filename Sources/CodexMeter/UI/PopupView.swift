@@ -6,22 +6,49 @@ struct PopupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Codex Meter")
-                    .font(.headline)
-                Spacer()
-                StatusBadgeView(status: appState.usage.connectionStatus)
+            Text("Codex Meter")
+                .font(.headline)
+
+            if settings.showCodex {
+                Divider()
+
+                HStack {
+                    AppLogo.image(named: "codex-logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                    Text("Codex").font(.subheadline).bold()
+                    Spacer()
+                    StatusBadgeView(status: appState.usage.connectionStatus)
+                }
+                UsageRowView(title: "5-hour usage", window: appState.usage.primary, resetLabel: "Resets in")
+                UsageRowView(title: "Weekly usage", window: appState.usage.secondary, resetLabel: "Resets on")
+                if let lastUpdated = appState.usage.lastUpdated {
+                    Text("Last updated \(lastUpdated.formatted(date: .omitted, time: .standard))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Divider()
+            if settings.showClaude {
+                Divider()
 
-            UsageRowView(title: "5-hour usage", window: appState.usage.primary, resetLabel: "Resets in")
-            UsageRowView(title: "Weekly usage", window: appState.usage.secondary, resetLabel: "Resets on")
-
-            if let lastUpdated = appState.usage.lastUpdated {
-                Text("Last updated \(lastUpdated.formatted(date: .omitted, time: .standard))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    AppLogo.image(named: "claude-logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                    Text("Claude Code").font(.subheadline).bold()
+                    Spacer()
+                    StatusBadgeView(status: appState.claudeUsage.connectionStatus)
+                }
+                UsageRowView(title: "5-hour usage", window: appState.claudeUsage.primary, resetLabel: "Resets in")
+                UsageRowView(title: "7-day usage", window: appState.claudeUsage.secondary, resetLabel: "Resets on")
+                if let lastUpdated = appState.claudeUsage.lastUpdated {
+                    Text("Last updated \(lastUpdated.formatted(date: .omitted, time: .standard))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Divider()
@@ -34,6 +61,6 @@ struct PopupView: View {
             }
         }
         .padding(16)
-        .frame(width: 280)
+        .frame(width: 300)
     }
 }
