@@ -15,6 +15,12 @@ final class AppState: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var pollingTask: Task<Void, Never>?
 
+    /// How long after boot the OS/network needs to fully settle before it's worth
+    /// even trying — a login item can be launched by macOS well before Wi-Fi and
+    /// background services are back up, so retries alone weren't enough right after
+    /// a restart.
+    private static let bootGracePeriodSeconds: Double = 300
+
     init() {
         serverManager.$connectionStatus
             .receive(on: DispatchQueue.main)
@@ -26,9 +32,29 @@ final class AppState: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-        connect()
-        fetchClaudeUsage()
-        startPollingLoop()
+
+        let bootDelay = Self.remainingBootGraceSeconds()
+        if bootDelay > 0 {
+            Logger.log("Delaying startup by \(Int(bootDelay))s to let the OS finish booting")
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(bootDelay))
+                guard let self else { return }
+                self.connect()
+                self.fetchClaudeUsage()
+                self.startPollingLoop()
+            }
+        } else {
+            connect()
+            fetchClaudeUsage()
+            startPollingLoop()
+        }
+    }
+
+    /// `systemUptime` already accounts for time spent before login, so a login-item
+    /// launch right after a restart reports a small uptime; a manual launch later in
+    /// the day reports an uptime well past the grace period and isn't delayed at all.
+    private static func remainingBootGraceSeconds() -> Double {
+        max(0, bootGracePeriodSeconds - ProcessInfo.processInfo.systemUptime)
     }
 
     /// Ties the fallback polling interval and per-provider on/off toggles to Settings.
@@ -104,11 +130,14 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Retried a couple of times before surfacing an error: right after a boot-time
+    /// Retried with backoff before surfacing an error: right after a boot-time
     /// launch (login item), `codex app-server` can accept the RPC connection before
-    /// its own auth/session state has finished settling, so the very first
-    /// `account/rateLimits/read` call can fail transiently even though the process
-    /// is otherwise healthy and the next call succeeds moments later.
+    /// the network/its own auth session has finished settling — Wi-Fi alone can take
+    /// 10-30s to come back after a restart — so the first `account/rateLimits/read`
+    /// calls can fail transiently even though the process is otherwise healthy and a
+    /// later call succeeds once the system has caught up.
+    private static let fetchQuotaBackoffSteps: [Double] = [2, 4, 8, 15, 30]
+
     private func fetchQuota(attempt: Int = 0) {
         Task {
             let service = UsagePollingService(rpcClient: serverManager.rpcClient)
@@ -116,13 +145,14 @@ final class AppState: ObservableObject {
                 let response = try await service.fetchRateLimits()
                 usage = .from(response, lastUpdated: Date(), connectionStatus: .connected)
             } catch {
-                guard attempt < 2 else {
+                guard attempt < Self.fetchQuotaBackoffSteps.count else {
                     Logger.log("fetchQuota failed after retries: \(error)")
                     usage.connectionStatus = .error(error.localizedDescription)
                     return
                 }
-                Logger.log("fetchQuota failed (attempt \(attempt + 1)), retrying: \(error)")
-                try? await Task.sleep(for: .seconds(2))
+                let delay = Self.fetchQuotaBackoffSteps[attempt]
+                Logger.log("fetchQuota failed (attempt \(attempt + 1)), retrying in \(delay)s: \(error)")
+                try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
                 fetchQuota(attempt: attempt + 1)
             }
