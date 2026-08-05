@@ -33,7 +33,8 @@ Về cơ bản **không cần cấp quyền riêng** (không đụng Accessibili
 
 - **Gatekeeper (lần mở đầu tiên)**: app build local nên thường không bị chặn. Nếu macOS báo *"không thể xác minh nhà phát triển"* (thường chỉ xảy ra khi app bị gắn cờ quarantine, ví dụ tải qua trình duyệt): chuột phải vào `CodexMeter.app` → **Open**, hoặc vào **System Settings → Privacy & Security** bấm **Open Anyway**.
 - **Login Items**: app tự động bật **"Launch at login"** ngay lần chạy đầu tiên (không cần bạn bấm gì), nên nó sẽ tự khởi động cùng macOS mỗi khi bạn đăng nhập máy. macOS chỉ hiện 1 thông báo hệ thống báo "đã thêm login item", không yêu cầu nhập mật khẩu admin. Muốn tắt: mở popup app → **Settings → General**, hoặc **System Settings → General → Login Items**.
-- **Keychain (chỉ để đọc quota Claude Code)**: lần đầu app đọc token từ mục Keychain `"Claude Code-credentials"`, macOS sẽ hiện 1 hộp thoại hỏi *"CodexMeter wants to use your confidential information..."* — bấm **Allow** (hoặc **Always Allow** để khỏi hỏi lại). App chỉ đọc access token để gọi API usage, không ghi/sửa gì vào Keychain.
+- **Keychain (chỉ để đọc quota Claude Code)**: lần đầu app đọc token từ mục Keychain `"Claude Code-credentials"`, macOS sẽ hiện 1 hộp thoại hỏi *"CodexMeter wants to use your confidential information..."* — bấm **Always Allow**. App chỉ đọc access token để gọi API usage, không ghi/sửa gì vào Keychain.
+  - Nếu bạn thấy hộp thoại này **hiện lại mỗi lần build**, xem mục [Code signing](#code-signing-để-macos-nhớ-always-allow-giữa-các-lần-build) bên dưới.
 
 ## Sử dụng
 
@@ -60,6 +61,29 @@ swift build          # build debug
 swift run            # chạy trực tiếp (hiện icon Dock vì chưa đóng gói .app)
 ./Scripts/bundle-app.sh   # đóng gói .build/CodexMeter.app để test LSUIElement/launch-at-login
 ```
+
+## Code signing (để macOS nhớ "Always Allow" giữa các lần build)
+
+`Scripts/bundle-app.sh` build xong sẽ tự `codesign` app bằng một identity cố định. Lý do: macOS Keychain nhớ quyền "Always Allow" dựa trên chữ ký code của app — nếu app không được ký (hoặc ký ad-hoc ngẫu nhiên mỗi lần build), mỗi lần rebuild macOS sẽ coi đó là "app khác" và bắt xác nhận mật khẩu lại từ đầu mỗi khi app đọc Keychain (`"Claude Code-credentials"`).
+
+Vì đây là certificate tự ký, **mỗi người tự tạo certificate riêng trên máy mình** (không share certificate qua git — private key không nên rời máy, và Keychain ACL vốn cũng chỉ có tác dụng trên máy đó):
+
+1. Mở **Keychain Access** → menu **Keychain Access → Certificate Assistant → Create a Certificate...**
+2. Điền:
+   - **Name**: tuỳ ý, ví dụ `<TênBạn> CodexMeter Signing`
+   - **Identity Type**: `Self Signed Root`
+   - **Certificate Type**: `Code Signing`
+3. Bấm **Create** → **Continue** đến hết → **Done**.
+4. Trong Keychain Access, tìm certificate vừa tạo (mục **My Certificates**, keychain **login**), double-click → mở rộng **Trust** → đổi **Code Signing** thành **Always Trust** → đóng và nhập mật khẩu máy để xác nhận.
+5. Copy `.env.example` thành `.env` và điền đúng tên certificate:
+   ```bash
+   cp .env.example .env
+   # sửa .env: CODEXMETER_SIGN_IDENTITY="<TênBạn> CodexMeter Signing"
+   ```
+
+`.env` đã nằm trong `.gitignore` nên không ai bị dính tên identity của người khác. `Scripts/bundle-app.sh` tự đọc `.env` nếu có; nếu không có `.env`, script fallback dùng tên mặc định `CodexMeter Local Signing`.
+
+Sau khi setup xong, `./install.sh` (hoặc `./Scripts/bundle-app.sh`) sẽ tự ký bằng identity của bạn ở mỗi lần build. Lần đầu tiên sau khi đổi sang identity mới, macOS sẽ hỏi Keychain 1 lần — bấm **Always Allow**, từ đó về sau sẽ không hỏi lại nữa vì chữ ký không đổi giữa các lần build.
 
 ## Cấu trúc project
 

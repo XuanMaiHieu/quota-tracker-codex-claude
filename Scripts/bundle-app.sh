@@ -4,6 +4,22 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="${1:-debug}"
 
+# Each developer signs with their own local certificate (Keychain ACLs are
+# per-machine anyway), configured via .env — see .env.example. .env is
+# gitignored so nobody's identity name ends up in the shared repo.
+if [[ -f "$ROOT_DIR/.env" ]]; then
+    set -a
+    source "$ROOT_DIR/.env"
+    set +a
+fi
+
+# Stable local signing identity (see Keychain Access > Certificate Assistant >
+# Create a Certificate > Code Signing). Signing with the same identity on
+# every build keeps the app's designated requirement stable, so macOS
+# Keychain ACLs (e.g. "Always Allow" for reading Claude Code's OAuth token)
+# persist across rebuilds instead of re-prompting every time.
+SIGN_IDENTITY="${CODEXMETER_SIGN_IDENTITY:-CodexMeter Local Signing}"
+
 if [[ "$CONFIG" == "release" ]]; then
     swift build -c release --package-path "$ROOT_DIR"
     BIN_PATH="$ROOT_DIR/.build/release/CodexMeter"
@@ -19,6 +35,16 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+
+echo "Signing with identity: $SIGN_IDENTITY"
+# Sign the raw binary before it's placed inside the .app bundle. Signing it
+# in-place under Contents/MacOS makes codesign treat it as part of a bundle
+# and refuse ("unsealed contents present in the bundle root") because the
+# resource bundle below sits loose at the .app root, outside Contents/.
+# Signing the standalone Mach-O first avoids that bundle-aware check
+# entirely; the embedded signature survives the plain file copy.
+codesign --force --sign "$SIGN_IDENTITY" "$BIN_PATH"
+codesign --verify --verbose "$BIN_PATH"
 
 cp "$BIN_PATH" "$MACOS_DIR/CodexMeter"
 
