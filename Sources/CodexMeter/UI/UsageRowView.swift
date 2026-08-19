@@ -49,7 +49,11 @@ struct UsageRowView: View {
         switch window.kind {
         case .weekly:
             return CountdownFormatter.resetsOn(window.resetsAt)
-        default:
+        case .fiveHour:
+            let countdown = CountdownFormatter.resetsIn(window.resetsAt)
+            let clock = CountdownFormatter.resetsAtClockTime(window.resetsAt)
+            return "\(countdown) (\(clock))"
+        case .unknown:
             return CountdownFormatter.resetsIn(window.resetsAt)
         }
     }

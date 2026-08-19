@@ -3,11 +3,13 @@ import Security
 
 enum ClaudeUsageError: LocalizedError {
     case missingCredentials
+    case keychainAccessDenied
     case requestFailed(Int)
 
     var errorDescription: String? {
         switch self {
         case .missingCredentials: return "not logged in"
+        case .keychainAccessDenied: return "Keychain access needed – click Refresh and choose Always Allow"
         case .requestFailed(let code): return "HTTP \(code)"
         }
     }
@@ -17,9 +19,7 @@ enum ClaudeUsageError: LocalizedError {
 /// CLI uses for its own quota display. No RPC/process involved, unlike Codex.
 struct ClaudeUsageService {
     func fetchUsage() async throws -> ClaudeUsageResponseWire {
-        guard let token = Self.resolveAccessToken() else {
-            throw ClaudeUsageError.missingCredentials
-        }
+        let token = try Self.resolveAccessToken()
 
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/oauth/usage")!)
         request.setValue("application/json", forHTTPHeaderField: "accept")
@@ -39,11 +39,26 @@ struct ClaudeUsageService {
     /// Claude Code stores its OAuth token in the macOS Keychain under this
     /// service name; `~/.claude/.credentials.json` is a fallback for setups
     /// where the CLI was configured to use a plain file instead.
-    private static func resolveAccessToken() -> String? {
-        readFromKeychain() ?? readFromCredentialsFile()
+    /// The macOS Keychain prompts for the user's password whenever this app
+    /// isn't (yet, or anymore) on the item's trusted-app list — e.g. right
+    /// after `claude` in Terminal rewrites the credential on token refresh.
+    /// That's an OS-enforced security boundary, not something we can bypass
+    /// silently; distinguish "denied/needs a prompt" from "no item at all"
+    /// so the UI can tell the user what to do (click Refresh, choose Always
+    /// Allow) instead of misleadingly claiming they're logged out.
+    private static func resolveAccessToken() throws -> String {
+        switch readFromKeychain() {
+        case .success(let token):
+            return token
+        case .failure(let error):
+            if let fileToken = readFromCredentialsFile() {
+                return fileToken
+            }
+            throw error
+        }
     }
 
-    private static func readFromKeychain() -> String? {
+    private static func readFromKeychain() -> Result<String, ClaudeUsageError> {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "Claude Code-credentials",
@@ -51,9 +66,19 @@ struct ClaudeUsageService {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
-        return parseAccessToken(from: data)
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data, let token = parseAccessToken(from: data) else {
+                return .failure(.missingCredentials)
+            }
+            return .success(token)
+        case errSecItemNotFound:
+            return .failure(.missingCredentials)
+        default:
+            // errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed, etc.
+            return .failure(.keychainAccessDenied)
+        }
     }
 
     private static func readFromCredentialsFile() -> String? {

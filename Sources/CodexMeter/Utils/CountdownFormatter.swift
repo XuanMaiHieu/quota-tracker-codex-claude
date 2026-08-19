@@ -23,4 +23,13 @@ enum CountdownFormatter {
         formatter.dateFormat = "EEE HH:mm"
         return formatter.string(from: date)
     }
+
+    /// Local clock time only, e.g. "18:35" — used to pair a countdown with
+    /// the actual wall-clock reset time for same-day windows.
+    static func resetsAtClockTime(_ date: Date?) -> String {
+        guard let date else { return "N/A" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
 }
