@@ -1,8 +1,15 @@
 import SwiftUI
 
 enum AppLogo {
+    /// The bundled .app ships the PNGs in Contents/Resources; `swift run` only
+    /// has SPM's resource bundle next to the build products.
+    private static func url(named name: String) -> URL? {
+        Bundle.main.url(forResource: name, withExtension: "png")
+            ?? Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources")
+    }
+
     static func image(named name: String) -> Image {
-        if let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources"),
+        if let url = url(named: name),
            let nsImage = NSImage(contentsOf: url) {
             return Image(nsImage: nsImage)
         }
@@ -13,7 +20,7 @@ enum AppLogo {
     /// a single Text is far more reliable for NSStatusItem sizing than composite HStack content.
     static func nsImage(named name: String, size: CGFloat) -> NSImage {
         let resolved: NSImage
-        if let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources"),
+        if let url = url(named: name),
            let loaded = NSImage(contentsOf: url) {
             resolved = loaded
         } else {

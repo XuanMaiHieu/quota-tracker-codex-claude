@@ -36,23 +36,14 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-echo "Signing with identity: $SIGN_IDENTITY"
-# Sign the raw binary before it's placed inside the .app bundle. Signing it
-# in-place under Contents/MacOS makes codesign treat it as part of a bundle
-# and refuse ("unsealed contents present in the bundle root") because the
-# resource bundle below sits loose at the .app root, outside Contents/.
-# Signing the standalone Mach-O first avoids that bundle-aware check
-# entirely; the embedded signature survives the plain file copy.
-codesign --force --sign "$SIGN_IDENTITY" "$BIN_PATH"
-codesign --verify --verbose "$BIN_PATH"
-
 cp "$BIN_PATH" "$MACOS_DIR/CodexMeter"
 
-# SPM's generated Bundle.module accessor looks for this bundle directly under
-# Bundle.main.bundleURL (the .app root), not Contents/Resources.
-RESOURCE_BUNDLE="$(dirname "$BIN_PATH")/CodexMeter_CodexMeter.bundle"
-if [[ -d "$RESOURCE_BUNDLE" ]]; then
-    cp -R "$RESOURCE_BUNDLE" "$APP_DIR/CodexMeter_CodexMeter.bundle"
+# Resources go under Contents/Resources so the whole .app can be sealed by
+# codesign (anything loose at the .app root makes it refuse to sign).
+# AppLogo looks them up via Bundle.main first.
+RESOURCE_DIR_SRC="$(dirname "$BIN_PATH")/CodexMeter_CodexMeter.bundle/Resources"
+if [[ -d "$RESOURCE_DIR_SRC" ]]; then
+    cp -R "$RESOURCE_DIR_SRC/." "$RESOURCES_DIR/"
 fi
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
@@ -81,5 +72,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+# Sign the assembled bundle, not just the Mach-O. A binary signed on its own
+# and then copied into a bundle fails verification as an app ("code has no
+# resources but signature indicates they must be present"), so the Keychain
+# can never match it against its "Always Allow" entry and keeps prompting.
+echo "Signing with identity: $SIGN_IDENTITY"
+codesign --force --sign "$SIGN_IDENTITY" "$APP_DIR"
+codesign --verify --strict --verbose "$APP_DIR"
 
 echo "Bundled: $APP_DIR"
