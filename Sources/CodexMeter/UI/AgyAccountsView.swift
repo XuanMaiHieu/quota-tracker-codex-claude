@@ -54,6 +54,11 @@ private struct AgyAccountBlock: View {
                         .truncationMode(.middle)
                 }
             }
+            if let error = account.usageError {
+                Text("Quota unavailable on the server: \(error)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
             ForEach(account.groups) { usage in
                 AgyGroupRow(usage: usage)
             }

@@ -26,6 +26,13 @@ struct AgyAccountWire: Decodable {
     let active: Bool
     /// Keyed by quota group: "gemini", "thirdparty" (Claude/GPT), "argon".
     let groups: [String: AgyGroupWire]
+    /// Set when the server could not read this account's quota (e.g. "refresh_failed").
+    let usageError: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, alias, email, active, groups
+        case usageError = "usage_error"
+    }
 }
 
 struct AgyBlockedWire: Decodable {
@@ -100,6 +107,7 @@ struct AgyAccount: Identifiable {
     let email: String?
     let isActive: Bool
     let groups: [AgyGroupUsage]
+    let usageError: String?
 }
 
 struct AgyState {
@@ -155,7 +163,7 @@ extension AgyState {
                         weekly: UsageWindow(agy: g.windows?["weekly"], kind: .weekly)
                     )
                 }
-                return AgyAccount(id: acct.id, name: acct.alias ?? acct.email ?? acct.id, email: acct.email, isActive: acct.active, groups: groups)
+                return AgyAccount(id: acct.id, name: acct.alias ?? acct.email ?? acct.id, email: acct.email, isActive: acct.active, groups: groups, usageError: acct.usageError)
             }
             .sorted { ($0.isActive ? 0 : 1, $0.name) < ($1.isActive ? 0 : 1, $1.name) }
         let blocked = (wire.rotation.blocked ?? [:])
