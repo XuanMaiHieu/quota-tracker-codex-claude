@@ -69,6 +69,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- server-agy-api (Antigravity quota) is usually plain http:// on an IP address, which
+         App Transport Security blocks by default and per-IP exceptions are not supported. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
 </dict>
 </plist>
 PLIST

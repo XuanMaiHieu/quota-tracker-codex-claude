@@ -24,3 +24,24 @@ enum RefreshInterval: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     var label: String { "\(rawValue)s" }
 }
+
+/// Which quota group of the live Antigravity account the menu bar badge shows.
+enum AgyBadgeGroup: String, CaseIterable, Identifiable {
+    case mostUsed
+    case gemini
+    case thirdparty
+    case argon
+
+    var id: String { rawValue }
+
+    var group: AgyGroup? { AgyGroup(rawValue: rawValue) }
+
+    var label: String {
+        switch self {
+        case .mostUsed: return "Most used group"
+        case .gemini: return "Gemini"
+        case .thirdparty: return "Claude/GPT"
+        case .argon: return "Gemini 4 Argon"
+        }
+    }
+}

@@ -51,6 +51,25 @@ struct PopupView: View {
                 }
             }
 
+            if settings.showAgy {
+                Divider()
+
+                HStack {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(MenuBarLabel.agyColor)
+                        .frame(width: 18, height: 18)
+                    Text("Antigravity").font(.subheadline).bold()
+                    Spacer()
+                    StatusBadgeView(status: appState.agy.connectionStatus)
+                }
+                AgyAccountsView(state: appState.agy)
+                if let lastUpdated = appState.agy.lastUpdated {
+                    Text("Last updated \(lastUpdated.formatted(date: .omitted, time: .standard))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Divider()
 
             HStack {
@@ -61,6 +80,6 @@ struct PopupView: View {
             }
         }
         .padding(16)
-        .frame(width: 300)
+        .frame(width: 320)
     }
 }

@@ -6,6 +6,24 @@ Trên menu bar, mỗi provider hiện 1 badge màu riêng (Codex xanh teal, Clau
 
 Quota Claude Code lấy được nếu bạn đã đăng nhập `claude` CLI trên máy (token đọc từ Keychain "Claude Code-credentials", hoặc từ `~/.claude/.credentials.json` nếu không dùng Keychain). Nếu chưa đăng nhập, phần Claude trong popup sẽ báo lỗi "not logged in" thay vì crash.
 
+## Antigravity (server-agy-api)
+
+App còn hiển thị quota các tài khoản **Antigravity (`agy`)** mà một server [`server-agy-api`](https://github.com/internal-tool-abc/server-agy-api) đang dùng. App đọc `GET <server>/dashboard/api/status` bằng **token chỉ-đọc** của dashboard. Token này không gọi được model và không tạo được token mới.
+
+- **Menu bar:** badge tím, có 5H / W là % **đã dùng** của tài khoản đang dùng (giống Codex và Claude). Mặc định lấy nhóm model đã dùng nhiều nhất; đổi được trong *Settings → Antigravity → Menu bar badge*: Gemini, Claude/GPT hoặc Argon.
+- **Popup:** mỗi tài khoản (tài khoản đang dùng có nhãn `LIVE`) có các dòng Gemini / Claude-GPT / Argon, mỗi dòng có thanh 5H và W kèm giờ reset. Ngoài ra có cảnh báo khi một nhóm hết quota ở mọi tài khoản, cùng số request đang chạy/chờ và số lần đổi tài khoản.
+
+**Cài đặt:**
+1. Mở `<server>/dashboard`, đăng nhập, bấm **Token cho app**, rồi **Copy**.
+2. Vào *Settings → Antigravity*:
+   - **Server URL**: mặc định `http://117.7.0.31:4082`.
+   - Dán token vào ô **App token**, bấm **Save token**. Token được lưu trong Keychain, mục `dev.hieumike.codexmeter.agy-dashboard`.
+3. App lấy dữ liệu theo *Refresh interval*. Server có bộ nhớ đệm quota 30 giây, nên app không làm server gọi Google nhiều hơn.
+
+Token hết hạn hoặc bị thu hồi (do đổi mật khẩu dashboard) thì popup báo "token rejected". Khi đó tạo token mới rồi lưu lại.
+
+`Info.plist` có `NSAllowsArbitraryLoads`, vì server thường chạy `http://` trên địa chỉ IP: App Transport Security chặn kiểu này, và ATS không hỗ trợ ngoại lệ theo IP. Khi chạy dev, đặt `CODEXMETER_AGY_TOKEN=<token>` thì app dùng token đó thay cho Keychain.
+
 ## Yêu cầu trước khi cài
 
 - macOS 13 trở lên

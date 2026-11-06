@@ -15,6 +15,19 @@ final class SettingsStore: ObservableObject {
     @Published var showClaude: Bool {
         didSet { defaults.set(showClaude, forKey: Keys.showClaude) }
     }
+    @Published var showAgy: Bool {
+        didSet { defaults.set(showAgy, forKey: Keys.showAgy) }
+    }
+    /// server-agy-api base URL, e.g. http://117.7.0.31:4082 (the token lives in the Keychain).
+    @Published var agyBaseURL: String {
+        didSet { defaults.set(agyBaseURL, forKey: Keys.agyBaseURL) }
+    }
+    @Published var agyBadgeGroup: AgyBadgeGroup {
+        didSet { defaults.set(agyBadgeGroup.rawValue, forKey: Keys.agyBadgeGroup) }
+    }
+    @Published private(set) var hasAgyToken: Bool
+    /// Bumped whenever the token is saved or removed, so AppState refetches.
+    @Published private(set) var agyTokenRevision = 0
     /// Source of truth is `SMAppService.mainApp.status`, not the stored default,
     /// since the user can revoke login items from System Settings directly.
     @Published var launchAtLogin: Bool {
@@ -29,6 +42,9 @@ final class SettingsStore: ObservableObject {
         static let didBootstrapLaunchAtLogin = "didBootstrapLaunchAtLogin"
         static let showCodex = "showCodex"
         static let showClaude = "showClaude"
+        static let showAgy = "showAgy"
+        static let agyBaseURL = "agyBaseURL"
+        static let agyBadgeGroup = "agyBadgeGroup"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -38,6 +54,10 @@ final class SettingsStore: ObservableObject {
         // Default to true when unset (absence of the key, not `false`, means "never configured").
         showCodex = (defaults.object(forKey: Keys.showCodex) as? Bool) ?? true
         showClaude = (defaults.object(forKey: Keys.showClaude) as? Bool) ?? true
+        showAgy = (defaults.object(forKey: Keys.showAgy) as? Bool) ?? true
+        agyBaseURL = defaults.string(forKey: Keys.agyBaseURL) ?? "http://117.7.0.31:4082"
+        agyBadgeGroup = AgyBadgeGroup(rawValue: defaults.string(forKey: Keys.agyBadgeGroup) ?? "") ?? .mostUsed
+        hasAgyToken = AgyTokenStore.read() != nil
         launchAtLogin = SMAppService.mainApp.status == .enabled
 
         // First run ever: enable "launch at login" automatically so a fresh
@@ -48,6 +68,20 @@ final class SettingsStore: ObservableObject {
                 launchAtLogin = true // triggers didSet -> applyLaunchAtLogin, self is fully initialized by now
             }
         }
+    }
+
+    @discardableResult
+    func saveAgyToken(_ token: String) -> Bool {
+        let ok = AgyTokenStore.save(token)
+        hasAgyToken = AgyTokenStore.read() != nil
+        agyTokenRevision += 1
+        return ok
+    }
+
+    func clearAgyToken() {
+        AgyTokenStore.delete()
+        hasAgyToken = AgyTokenStore.read() != nil
+        agyTokenRevision += 1
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {

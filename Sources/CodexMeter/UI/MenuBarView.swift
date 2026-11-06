@@ -15,9 +15,10 @@ struct MenuBarLabel: View {
 
     private static let codexColor = Color(red: 0x25 / 255.0, green: 0x96 / 255.0, blue: 0xBE / 255.0)
     private static let claudeColor = Color(red: 0xC1 / 255.0, green: 0x5F / 255.0, blue: 0x3C / 255.0)
+    static let agyColor = Color(red: 0x6E / 255.0, green: 0x4B / 255.0, blue: 0xD8 / 255.0)
 
     private var fallbackText: String {
-        if !settings.showCodex && !settings.showClaude { return "Quota off" }
+        if !settings.showCodex && !settings.showClaude && !settings.showAgy { return "Quota off" }
         return "Quota ⚠︎"
     }
 
@@ -40,6 +41,14 @@ struct MenuBarLabel: View {
                 backgroundColor: Self.claudeColor,
                 fiveHour: metric(appState.claudeUsage.primary),
                 weekly: metric(appState.claudeUsage.secondary)
+            ))
+        }
+        if settings.showAgy, !isError(appState.agy.connectionStatus), appState.agy.activeAccount != nil {
+            let badge = appState.agy.badge(for: settings.agyBadgeGroup)
+            result.append(.init(
+                backgroundColor: Self.agyColor,
+                fiveHour: metric(badge.fiveHour),
+                weekly: metric(badge.weekly)
             ))
         }
         return result

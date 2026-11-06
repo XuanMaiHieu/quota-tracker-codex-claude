@@ -5,6 +5,7 @@ import Combine
 final class AppState: ObservableObject {
     @Published var usage: UsageState = .notConnected
     @Published var claudeUsage: UsageState = .notConnected
+    @Published var agy = AgyState()
 
     let serverManager = CodexServerManager()
     private let claudeUsageService = ClaudeUsageService()
@@ -12,6 +13,8 @@ final class AppState: ObservableObject {
     var refreshIntervalSeconds: Double = 30
     private var showCodex = true
     private var showClaude = true
+    private var showAgy = true
+    private var agyBaseURL = ""
     private var cancellables: Set<AnyCancellable> = []
     private var pollingTask: Task<Void, Never>?
 
@@ -90,6 +93,38 @@ final class AppState: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Antigravity (server-agy-api): refetch when toggled, when the URL settles after typing,
+        // or when the token is saved/removed.
+        settings.$agyBaseURL
+            .sink { [weak self] url in self?.agyBaseURL = url }
+            .store(in: &cancellables)
+        settings.$showAgy
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                self.showAgy = enabled
+                if enabled {
+                    self.fetchAgy()
+                } else {
+                    self.agy.connectionStatus = .connecting
+                }
+            }
+            .store(in: &cancellables)
+        settings.$agyBaseURL
+            .dropFirst()
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.showAgy else { return }
+                self.fetchAgy()
+            }
+            .store(in: &cancellables)
+        settings.$agyTokenRevision
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self, self.showAgy else { return }
+                self.fetchAgy()
+            }
+            .store(in: &cancellables)
     }
 
     /// Connects to the real `codex app-server`; a successful handshake triggers
@@ -109,6 +144,9 @@ final class AppState: ObservableObject {
         if showClaude {
             fetchClaudeUsage()
         }
+        if showAgy {
+            fetchAgy()
+        }
     }
 
     /// Continuous fallback polling (plan.md §7.3/§10): reconnect itself is handled
@@ -125,6 +163,9 @@ final class AppState: ObservableObject {
                 }
                 if self.showClaude {
                     self.fetchClaudeUsage()
+                }
+                if self.showAgy {
+                    self.fetchAgy()
                 }
             }
         }
@@ -169,6 +210,26 @@ final class AppState: ObservableObject {
                 claudeUsage = .from(claude: response, lastUpdated: Date(), connectionStatus: .connected)
             } catch {
                 claudeUsage.connectionStatus = .error(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Plain HTTPS/HTTP call to server-agy-api with the dashboard's read-only app token.
+    /// The server caches quota for 30 s, so polling every 15-60 s costs Google nothing extra.
+    private func fetchAgy() {
+        guard let token = AgyTokenStore.read(),
+              !agyBaseURL.trimmingCharacters(in: .whitespaces).isEmpty else {
+            agy = AgyState(connectionStatus: .error(AgyStatusError.notConfigured.localizedDescription))
+            return
+        }
+        let service = AgyStatusService(baseURL: agyBaseURL, token: token)
+        Task {
+            do {
+                let status = try await service.fetchStatus()
+                agy = .from(status, lastUpdated: Date())
+            } catch {
+                Logger.log("fetchAgy failed: \(error)")
+                agy.connectionStatus = .error(error.localizedDescription)
             }
         }
     }
