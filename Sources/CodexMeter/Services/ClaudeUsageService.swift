@@ -39,14 +39,17 @@ struct ClaudeUsageService {
     /// Claude Code stores its OAuth token in the macOS Keychain under this
     /// service name; `~/.claude/.credentials.json` is a fallback for setups
     /// where the CLI was configured to use a plain file instead.
-    /// The macOS Keychain prompts for the user's password whenever this app
-    /// isn't (yet, or anymore) on the item's trusted-app list — e.g. right
-    /// after `claude` in Terminal rewrites the credential on token refresh.
-    /// That's an OS-enforced security boundary, not something we can bypass
-    /// silently; distinguish "denied/needs a prompt" from "no item at all"
-    /// so the UI can tell the user what to do (click Refresh, choose Always
-    /// Allow) instead of misleadingly claiming they're logged out.
+    /// Read it through `/usr/bin/security` first, the same way the CLI does:
+    /// that tool is on the item's trusted-app list, whereas this app's own
+    /// "Always Allow" entry stops being honoured every time `claude` rewrites
+    /// the item on token refresh, which re-prompted for the login password on
+    /// every new session. The direct Keychain read stays as a fallback; when
+    /// it's denied, distinguish that from "no item at all" so the UI doesn't
+    /// misleadingly claim the user is logged out.
     private static func resolveAccessToken() throws -> String {
+        if let token = readViaSecurityTool() {
+            return token
+        }
         switch readFromKeychain() {
         case .success(let token):
             return token
@@ -56,6 +59,24 @@ struct ClaudeUsageService {
             }
             throw error
         }
+    }
+
+    private static func readViaSecurityTool() -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        return parseAccessToken(from: data)
     }
 
     private static func readFromKeychain() -> Result<String, ClaudeUsageError> {
